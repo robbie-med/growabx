@@ -1,0 +1,27 @@
+antibiotics-game/
+├── index.html         # Main HTML entry point
+├── css/
+│   └── styles.css     # Basic styling
+├── assets/
+│   ├── images/        # Sprite sheets and images
+│   │   ├── pathogens/ # Pathogen sprites
+│   │   ├── weapons/   # Antibiotic weapon sprites
+│   │   └── ui/        # UI elements
+│   └── audio/         # Sound effects (optional)
+├── js/
+│   ├── main.js        # Game initialization
+│   ├── scenes/
+│   │   ├── Boot.js       # Loading resources scene
+│   │   ├── Menu.js       # Main menu scene
+│   │   ├── Tutorial.js   # Tutorial scene
+│   │   ├── Game.js       # Main gameplay scene
+│   │   └── Results.js    # End of game results scene
+│   ├── entities/
+│   │   ├── Player.js     # Player aircraft
+│   │   ├── Pathogen.js   # Pathogen class
+│   │   └── Weapon.js     # Antibiotic weapons
+│   └── data/
+│       ├── pathogens.js  # Pathogen definitions
+│       └── antibiotics.js # Antibiotic definitions
+└── lib/
+    └── phaser.min.js  # Phaser library
