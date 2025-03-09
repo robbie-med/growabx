@@ -1,25 +1,20 @@
 // Main game configuration
 const config = {
-    type: Phaser.AUTO,
+    type: Phaser.CANVAS, // Force canvas renderer
     width: 800,
     height: 600,
-    parent: 'game-container',
-    physics: {
-        default: 'arcade',
-        arcade: {
-            gravity: { y: 0 },
-            debug: false
+    // other settings...
+    callbacks: {
+        preBoot: function(game) {
+            // For debugging
+            console.log("Game pre-boot");
+        },
+        postBoot: function(game) {
+            // For debugging
+            console.log("Game post-boot");
         }
-    },
-    scene: [
-        BootScene,
-        MenuScene,
-        TutorialScene,
-        GameScene,
-        ResultsScene
-    ]
+    }
 };
-
 // Initialize the game
 const game = new Phaser.Game(config);
 
