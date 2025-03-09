@@ -22,6 +22,10 @@ class GameScene extends Phaser.Scene {
         this.pathogenSpawnTimer = 0;
         this.pathogenPool = [];
         this.availableAntibiotics = [];
+        
+        // Entity groups
+        this.pathogenGroup = null;
+        this.missileGroup = null;
     }
 
     init(data) {
@@ -48,12 +52,12 @@ class GameScene extends Phaser.Scene {
         // Create the fort (patient)
         this.createFort();
         
+        // Setup physics groups
+        this.pathogenGroup = this.add.group();
+        this.missileGroup = this.add.group();
+        
         // Create player (medical aircraft)
         this.createPlayer();
-        
-        // Setup physics groups
-        this.pathogens = this.physics.add.group();
-        this.missiles = this.physics.add.group();
         
         // Create antibiotics selection UI
         this.createAntibioticsUI();
@@ -62,8 +66,8 @@ class GameScene extends Phaser.Scene {
         this.createHUD();
         
         // Setup collisions
-        this.physics.add.overlap(this.missiles, this.pathogens, this.handleMissilePathogenCollision, null, this);
-        this.physics.add.overlap(this.pathogens, this.fort, this.handlePathogenFortCollision, null, this);
+        this.physics.add.overlap(this.missileGroup, this.pathogenGroup, this.handleMissilePathogenCollision, null, this);
+        this.physics.add.overlap(this.pathogenGroup, this.fort, this.handlePathogenFortCollision, null, this);
         
         // Prepare pathogen pool for this level
         this.preparePathogenPool();
@@ -89,8 +93,20 @@ class GameScene extends Phaser.Scene {
             return;
         }
         
-        // Handle player movement
-        this.handlePlayerMovement();
+        // Update player
+        if (this.player) {
+            this.player.update(time, delta);
+        }
+        
+        // Update all missiles
+        this.missileGroup.getChildren().forEach(missile => {
+            missile.update();
+        });
+        
+        // Update all pathogens
+        this.pathogenGroup.getChildren().forEach(pathogen => {
+            pathogen.update();
+        });
         
         // Spawn pathogens
         this.pathogenSpawnTimer -= delta;
@@ -140,28 +156,8 @@ class GameScene extends Phaser.Scene {
         const centerX = this.game.config.width / 2;
         const playerY = this.game.config.height - 150;
         
-        this.player = this.physics.add.sprite(centerX, playerY, 'player');
-        
-        // If no sprite is loaded, create a simple shape as placeholder
-        if (!this.textures.exists('player')) {
-            const playerGraphics = this.add.graphics();
-            playerGraphics.fillStyle(0x00AAFF, 1);
-            playerGraphics.fillTriangle(0, -20, -15, 15, 15, 15);
-            playerGraphics.fillStyle(0xFFFFFF, 1);
-            playerGraphics.fillCircle(0, 0, 5);
-            
-            // Create texture from graphics
-            playerGraphics.generateTexture('player', 40, 40);
-            playerGraphics.destroy();
-            
-            // Now apply the texture
-            this.player.setTexture('player');
-        }
-        
-        this.player.setDisplaySize(40, 40);
-        this.player.speed = 300;
-        this.player.fireRate = 300; // milliseconds between shots
-        this.player.lastFired = 0;
+        // Use our Player class
+        this.player = new Player(this, centerX, playerY);
     }
 
     createAntibioticsUI() {
@@ -259,9 +255,6 @@ class GameScene extends Phaser.Scene {
     }
 
     setupInput() {
-        // Setup keyboard input
-        this.cursors = this.input.keyboard.createCursorKeys();
-        
         // Spacebar for scanning
         this.input.keyboard.on('keydown-SPACE', () => {
             this.startScanning();
@@ -292,6 +285,26 @@ class GameScene extends Phaser.Scene {
                 }
             });
         }
+        
+        // Key for pausing the game (ESC)
+        this.input.keyboard.on('keydown-ESC', () => {
+            // Toggle pause state
+            if (this.scene.isPaused('GameScene')) {
+                this.scene.resume('GameScene');
+                if (this.pauseText) {
+                    this.pauseText.destroy();
+                    this.pauseText = null;
+                }
+            } else {
+                this.scene.pause('GameScene');
+                this.pauseText = this.add.text(
+                    this.game.config.width / 2,
+                    this.game.config.height / 2,
+                    'PAUSED\nPress ESC to resume',
+                    { fontSize: '32px', fill: '#FFFFFF', align: 'center' }
+                ).setOrigin(0.5).setDepth(999);
+            }
+        });
     }
 
     startWave() {
@@ -311,7 +324,7 @@ class GameScene extends Phaser.Scene {
         this.pathogenSpawnTimer = Infinity;
         
         // Wait for all pathogens to be cleared or timeout
-        const remainingPathogens = this.pathogens.getChildren().length;
+        const remainingPathogens = this.pathogenGroup.getChildren().length;
         
         if (remainingPathogens === 0 || this.fort.health <= 0) {
             // Wave completed
@@ -347,34 +360,9 @@ class GameScene extends Phaser.Scene {
         });
     }
 
-    handlePlayerMovement() {
-        // Reset velocity
-        this.player.setVelocity(0);
-        
-        // Movement based on cursor keys
-        if (this.cursors.left.isDown) {
-            this.player.setVelocityX(-this.player.speed);
-        } else if (this.cursors.right.isDown) {
-            this.player.setVelocityX(this.player.speed);
-        }
-        
-        if (this.cursors.up.isDown) {
-            this.player.setVelocityY(-this.player.speed);
-        } else if (this.cursors.down.isDown) {
-            this.player.setVelocityY(this.player.speed);
-        }
-        
-        // Keep player within bounds
-        const halfWidth = this.player.displayWidth / 2;
-        const halfHeight = this.player.displayHeight / 2;
-        const maxX = this.game.config.width - halfWidth;
-        const maxY = this.game.config.height - 100 - halfHeight; // Above UI
-        const minX = halfWidth;
-        const minY = halfHeight;
-        
-        this.player.x = Phaser.Math.Clamp(this.player.x, minX, maxX);
-        this.player.y = Phaser.Math.Clamp(this.player.y, minY, maxY);
-    }
+    // Player movement is now handled in the Player class
+    // This method is no longer needed
+
 
     selectAntibiotic(id) {
         // Deselect previous
@@ -411,8 +399,13 @@ class GameScene extends Phaser.Scene {
         buttonData.cooldownTimer = antibiotic.cooldown;
         buttonData.button.setFillStyle(0x777777); // Darken while on cooldown
         
-        // Create missile
-        this.createMissile(antibiotic);
+        // Create missile using the player's fire method
+        const missile = this.player.fire(this.time.now, antibiotic);
+        
+        // Add missile to the group if created
+        if (missile) {
+            this.missileGroup.add(missile);
+        }
         
         // Schedule cooldown end
         this.time.addEvent({
@@ -425,37 +418,9 @@ class GameScene extends Phaser.Scene {
         });
     }
 
-    createMissile(antibiotic) {
-        // Create missile from player position
-        const missile = this.missiles.create(this.player.x, this.player.y, 'missile');
-        
-        // If no sprite exists, create one
-        if (!this.textures.exists('missile')) {
-            const missileGraphics = this.add.graphics();
-            missileGraphics.fillStyle(0xFFFFFF, 1);
-            missileGraphics.fillRect(-2, -8, 4, 16);
-            
-            // Create texture
-            missileGraphics.generateTexture('missile', 4, 16);
-            missileGraphics.destroy();
-            
-            // Now apply texture
-            missile.setTexture('missile');
-        }
-        
-        // Set properties
-        missile.setDisplaySize(6, 18);
-        missile.setTint(antibiotic.color);
-        missile.antibioticId = antibiotic.id;
-        missile.antibioticData = antibiotic;
-        
-        // Set velocity (upward)
-        missile.setVelocityY(-400);
-        
-        // Destroy when out of bounds
-        missile.checkWorldBounds = true;
-        missile.outOfBoundsKill = true;
-    }
+    // Missile creation is now handled in the Player and Weapon classes
+    // This method is no longer needed
+
 
     spawnPathogen() {
         // Select a random pathogen from the pool
@@ -467,59 +432,11 @@ class GameScene extends Phaser.Scene {
         const x = Phaser.Math.Between(50, this.game.config.width - 50);
         const y = -20; // Start above screen
         
-        // Create pathogen sprite
-        const pathogen = this.pathogens.create(x, y, `pathogen_${pathogenData.id}`);
+        // Create pathogen using our Pathogen class
+        const pathogen = new Pathogen(this, x, y, pathogenData);
         
-        // If texture doesn't exist, create one
-        if (!this.textures.exists(`pathogen_${pathogenData.id}`)) {
-            const pathogenGraphics = this.add.graphics();
-            
-            // Draw basic circle
-            pathogenGraphics.fillStyle(pathogenData.color, 1);
-            pathogenGraphics.fillCircle(0, 0, 15);
-            
-            // Add shape details based on type
-            if (pathogenData.shape === 'rod') {
-                // Add elongation for rods
-                pathogenGraphics.fillRect(-10, -5, 20, 10);
-            } else if (pathogenData.shape === 'cocci' && pathogenData.name.includes('Strep')) {
-                // Draw diplococci pattern for Strep
-                pathogenGraphics.fillStyle(0xFFFFFF, 0.3);
-                pathogenGraphics.fillCircle(-5, 0, 7);
-                pathogenGraphics.fillCircle(5, 0, 7);
-            } else if (pathogenData.shape === 'cocci' && pathogenData.name.includes('Staph')) {
-                // Draw clustered pattern for Staph
-                pathogenGraphics.fillStyle(0xFFFFFF, 0.3);
-                pathogenGraphics.fillCircle(-5, -5, 5);
-                pathogenGraphics.fillCircle(5, -5, 5);
-                pathogenGraphics.fillCircle(0, 5, 5);
-            }
-            
-            // Create texture
-            pathogenGraphics.generateTexture(`pathogen_${pathogenData.id}`, 40, 40);
-            pathogenGraphics.destroy();
-            
-            // Apply texture
-            pathogen.setTexture(`pathogen_${pathogenData.id}`);
-        }
-        
-        // Set properties
-        pathogen.setDisplaySize(40, 40);
-        pathogen.pathogenData = pathogenData;
-        
-        // Set movement speed based on difficulty
-        const speed = pathogenData.speed[this.difficulty];
-        
-        // Calculate direction toward fort with some randomness
-        const fortX = this.fort.x;
-        const angle = Phaser.Math.Angle.Between(x, y, fortX, this.fort.y);
-        const variance = Phaser.Math.FloatBetween(-0.2, 0.2); // Add some randomness
-        
-        // Set velocity based on angle
-        pathogen.setVelocity(
-            Math.cos(angle + variance) * speed,
-            Math.sin(angle + variance) * speed
-        );
+        // Add to the group
+        this.pathogenGroup.add(pathogen);
         
         return pathogen;
     }
@@ -528,7 +445,7 @@ class GameScene extends Phaser.Scene {
         this.scanning = true;
         
         // Find nearest pathogen to scan
-        const pathogens = this.pathogens.getChildren();
+        const pathogens = this.pathogenGroup.getChildren();
         if (pathogens.length === 0) return;
         
         let nearestDistance = Infinity;
@@ -551,15 +468,8 @@ class GameScene extends Phaser.Scene {
             this.scanTarget = nearestPathogen;
             this.createScanWindow(nearestPathogen);
             
-            // Slow down the pathogen while scanning
-            this.scanTarget.oldVelocity = {
-                x: this.scanTarget.body.velocity.x,
-                y: this.scanTarget.body.velocity.y
-            };
-            this.scanTarget.setVelocity(
-                this.scanTarget.body.velocity.x * 0.3,
-                this.scanTarget.body.velocity.y * 0.3
-            );
+            // Use the pathogen's scanning method
+            this.scanTarget.startScanning();
         }
     }
 
@@ -572,12 +482,9 @@ class GameScene extends Phaser.Scene {
             this.scanWindow = null;
         }
         
-        // Restore pathogen speed
-        if (this.scanTarget && this.scanTarget.active && this.scanTarget.oldVelocity) {
-            this.scanTarget.setVelocity(
-                this.scanTarget.oldVelocity.x,
-                this.scanTarget.oldVelocity.y
-            );
+        // Use the pathogen's method to stop scanning
+        if (this.scanTarget && this.scanTarget.active) {
+            this.scanTarget.stopScanning();
             this.scanTarget = null;
         }
     }
@@ -654,35 +561,25 @@ class GameScene extends Phaser.Scene {
     }
 
     handleMissilePathogenCollision(missile, pathogen) {
-        // Check if antibiotic is effective against this pathogen
-        const isEffective = pathogen.pathogenData.vulnerableTo.includes(missile.antibioticId);
-        const isResistant = pathogen.pathogenData.resistantTo.includes(missile.antibioticId);
+        // Use the missile's hit method
+        missile.hitPathogen(pathogen);
         
-        if (isEffective) {
+        // Get result
+        const hitResult = pathogen.hit(missile.antibioticId);
+        
+        // Process result
+        if (hitResult.result === 'destroyed') {
             // Destroy pathogen
             this.destroyPathogen(pathogen, true);
-            missile.destroy();
             
             // Award points
-            this.score += pathogen.pathogenData.points;
+            this.score += hitResult.points;
             
             // Update HUD
             this.updateHUD();
-        } else if (isResistant) {
-            // Pathogen is resistant - no effect
-            missile.destroy();
-            
-            // Visual feedback
-            this.showFloatingText(pathogen.x, pathogen.y, "RESISTANT!", 0xFF0000);
-            
-            // Mark as resistant (visual cue)
-            pathogen.setTint(0xFF0000);
-        } else {
-            // Partial effect (wrong antibiotic but not resistant)
-            missile.destroy();
-            
-            // Visual feedback
-            this.showFloatingText(pathogen.x, pathogen.y, "Ineffective", 0xFFAA00);
+        } else if (hitResult.result === 'resistant') {
+            // Track resistance
+            gameState.pathogens.resisted++;
         }
     }
 
@@ -696,6 +593,9 @@ class GameScene extends Phaser.Scene {
         
         // Visual feedback
         this.cameras.main.shake(200, 0.01);
+        
+        // Show damage text
+        this.showFloatingText(fort.x, fort.y - 40, "DAMAGE! -10%", 0xFF0000);
         
         // Update health bar
         this.updateHUD();
